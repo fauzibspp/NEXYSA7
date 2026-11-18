@@ -1,0 +1,25 @@
+# Gradle
+.gradle/
+.gradle-home/
+build/
+
+# Android tooling
+.android-home/
+
+# Local machine configuration
+local.properties
+
+# IDE
+.idea/
+*.iml
+captures/
+
+# Kotlin
+.kotlin/
+
+# Local tooling (downloaded Gradle distribution, etc.)
+.tools/
+
+# OS
+.DS_Store
+Thumbs.db

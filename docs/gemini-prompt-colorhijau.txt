@@ -1,0 +1,82 @@
+#Development using deepseek harness - 18 Nov 2026
+- Status: simulator - worked well
+
+For **OpenAI Codex CLI** running inside **VS Code** (either via the integrated terminal or the official Codex VS Code extension), the gold-standard workflow is a **two-part setup**:
+
+1. **`AGENTS.md` (Persistent Project Context):** Placed in the root of your Android project. Codex reads this automatically on every turn so it remembers your hardware specs, architecture, and build commands without you repeating yourself.
+2. **Execution Prompts (Task Triggers):** Short, phase-by-phase prompts you type into the Codex terminal/panel to build, test, and verify the app cleanly.
+
+---
+
+### 1. Recommended Codex CLI Settings in VS Code
+
+* **Model & Reasoning:** Use **`gpt-5.3-codex`** (or `gpt-5.4`) with **Medium** or **High** reasoning effort for architectural scaffolding.
+* **Approval Policy:** Start with `on-request` (`codex -a on-request`) so Codex can freely edit Kotlin files in your workspace while still asking permission before running destructive shell/Gradle commands.
+* **Plan Mode:** Run `/plan` before major multi-file generation so you can approve its file structure first.
+
+---
+
+### 2. Step 1: Create `AGENTS.md` in Your Project Root
+
+Create a file named `AGENTS.md` at the root of your Android repository and paste this inside. Keep it concise and focused on rules, hardware constraints, and build verification:
+
+```markdown
+# AGENTS.md — Nexys A7 FPGA Cryptographic Companion (Android)
+
+## Project Overview
+Native Android application written in **Kotlin** (Jetpack Compose, MVVM, Kotlin Coroutines/Flow) that acts as a mobile client for a hardware encryption/decryption engine running on a **Digilent Nexys A7 (XC7A100T-1CSG324C)** FPGA board.
+
+## Hardware & Protocol Target (Future Integration)
+- **Target Board:** Digilent Nexys A7-100T (`XC7A100T-1CSG324C`).
+- **Transports:**
+  1. **USB Serial:** Digilent onboard FTDI FT2232HQ USB-UART bridge (default 115200 baud, 8N1).
+  2. **BLE:** Digilent Pmod BLE (Microchip RN4870) UART Transparent Service (`49535343-FE7D-4AE5-8FA9-9FAFD205E455`).
+- **Framing Protocol:** Design a clean packet framing layer (`[START_BYTE][CMD: ENCRYPT/DECRYPT][PAYLOAD_LEN][PAYLOAD][CRC16]`) so real hardware drivers can drop in later without changing UI or ViewModel code.
+
+## Current Phase: Hardware Simulation Mode
+- **We do NOT have the physical Nexys A7 board yet.**
+- All transport layers (`BleFpgaTransport`, `UsbSerialFpgaTransport`) and the FPGA engine must run behind a clean `FpgaTransport` interface with a `SimulatedFpgaTransport` implementation enabled by default.
+- Simulation must realistically mimic connection handshake, transmission latency, chunked progress for files, and deterministic mock encryption/decryption (e.g., reversible AES-128 or XOR-hex framing) so round-trip Encrypt -> Decrypt verifies cleanly.
+
+## Architecture & Tech Stack
+- **Language:** Kotlin 2.x, Java 17 target.
+- **UI:** Jetpack Compose (Material 3) with a 2-tab layout: **Text Encryption** and **File Encryption**, plus a top connection status bar (Disconnected / Simulated / BLE / USB Serial).
+- **DI:** Hilt or clean manual dependency container (`AppContainer`) so swapping `SimulatedFpgaTransport` for real `UsbSerialFpgaTransport` / `BleFpgaTransport` requires changing a single binding.
+- **Libraries to prepare:** `usb-serial-for-android` (for FTDI UART) and Android `BluetoothGatt` / Nordic BLE abstractions (stubbed cleanly for now).
+
+## Build & Verification Rules
+- Always verify changes by running `./gradlew testDebugUnitTest` and `./gradlew assembleDebug` before finishing a task.
+- Keep UI stateless; hoist all state to ViewModels exposing `StateFlow`.
+- Never hardcode mock logic inside Composables or ViewModels—isolate all simulation inside the data/transport layer.
+
+```
+
+---
+
+### 3. Step 2: Prompts to Run in Codex CLI
+
+Once `AGENTS.md` is saved, open your VS Code terminal (`Ctrl + ~`), start `codex`, and run these prompts in order:
+
+#### Prompt A — Scaffold Architecture & Simulation Engine (Run with `/plan` first)
+
+> `/plan` Read `AGENTS.md`. Scaffold the complete Android project architecture for the Nexys A7 FPGA Encryption app. Create:
+> 1. Domain models (`EncryptionMode`, `TransportType`, `ConnectionState`, `CryptoPacket`, `CryptoResult`).
+> 2. The `FpgaTransport` interface, packet framer (`NexysPacketFramer` with CRC16), and `SimulatedFpgaTransport` supporting simulated connection delays, chunked streaming progress, and reversible round-trip Encrypt/Decrypt operations.
+> 3. Stub implementations for `UsbSerialFpgaTransport` (FTDI 115200 baud) and `BleFpgaTransport` (RN4870 Transparent UART UUIDs) with clear `TODO(HARDWARE)` markers where physical I/O hooks in.
+> 4. Unit tests verifying packet framing, CRC validation, and round-trip simulated text/file encryption and decryption. Run `./gradlew testDebugUnitTest` until green.
+> 
+> 
+
+#### Prompt B — Build the Two-Tab Jetpack Compose UI
+
+> Using the transport layer and ViewModels you created, build the Material 3 Jetpack Compose UI:
+> 1. **Top App Bar:** Connection selector (Simulated USB / Simulated BLE / Disconnected), Connect/Disconnect toggle, and live status badge showing target chip `XC7A100T-1CSG324C`.
+> 2. **Tab 1 — Text Encryption:** Input text field, format selector (UTF-8 / Hex), Encrypt & Decrypt action buttons, simulated FPGA latency/throughput readout, and output box with Copy/Swap-to-Input buttons.
+> 3. **Tab 2 — File Encryption:** Android Storage Access Framework (`OpenDocument` / `CreateDocument`) file picker, file size & chunk preview, linear progress indicator during simulated UART/BLE transfer, Encrypt & Decrypt buttons, and Save Output action.
+> Ensure full state preservation across tab switches and run `./gradlew assembleDebug` to verify the build compiles cleanly.
+> 
+> 
+
+#### Prompt C — Later, When Your Nexys A7 Arrives
+
+> We now have the physical Digilent Nexys A7 (`XC7A100T-1CSG324C`) board connected via USB-UART (FT2232HQ at 115200 baud) and Pmod BLE (RN4870). Replace the `TODO(HARDWARE)` stubs in `UsbSerialFpgaTransport` and `BleFpgaTransport` with real hardware I/O using `usb-serial-for-android` and Android `BluetoothGatt`, keeping `SimulatedFpgaTransport` available as a fallback toggle in the UI.
